@@ -4,6 +4,16 @@ A production-ready Telegram bot template built with **Aiogram v3**, containerize
 
 ---
 
+## Short Summary what need to be in instruction
+- Create BOT in BotFather in Telegram and get BOT TOKEN
+- Create a GitHub Repo with Telegram Bot Code (Python + Aiogram)
+    - Add Project Structure
+- Create Azure Cloud Ubunty VM and set up SSH for connection 
+    - Install Docker to Azure Cloud Ubunty VM  
+    - Download Bot Repo from GitHub to Azure Cloud Ubunty VM
+    - Start Bot in the Docker Container
+- Set Up CI for Automatic Bot Deploy to Azure Cloud Ubunty VM after chenges in Repo using GitHub Actions
+
 ## 📋 Table of Contents
 
 - [Features](#features)
@@ -221,7 +231,185 @@ docker push YOUR_DOCKERHUB_USERNAME/telegram-bot:latest
 
 ---
 
-### Option A: Azure Container Instances (ACI)
+### Option A: Azure Ubuntu VM with Docker
+
+**Best for:** Full control over the environment, persistent VM hosting, cost-effective for long-running bots.
+
+#### Step 1: Create Ubuntu VM
+
+1. **Create VM via Azure Portal or CLI:**
+   ```bash
+   az vm create \
+     --resource-group telegram-bot-rg \
+     --name telegram-bot-vm \
+     --image Ubuntu2204 \
+     --size Standard_B1s \
+     --admin-username azureuser \
+     --generate-ssh-keys
+   ```
+
+2. **Connect to VM:**
+   ```bash
+   ssh azureuser@<VM_PUBLIC_IP>
+   ```
+
+#### Step 2: Install Docker on Ubuntu VM
+
+```bash
+# Update system packages
+sudo apt update && sudo apt upgrade -y
+
+# Install Docker and dependencies
+sudo apt install docker.io git python3-pip -y
+
+# Verify Docker installation
+docker --version
+sudo systemctl status docker
+
+# Enable Docker to start on boot
+sudo systemctl enable docker
+sudo systemctl start docker
+
+# Add user to docker group (optional - avoid sudo)
+sudo usermod -aG docker $USER
+# Log out and back in for changes to take effect
+```
+
+#### Step 3: Clone Repository and Setup
+
+```bash
+# Clone your bot repository
+git clone https://github.com/YOUR_USERNAME/telegram-bot-base.git
+cd telegram-bot-base
+
+# Create .env file with your bot token
+echo "BOT_TOKEN=your_bot_token_here" > .env
+echo "LOG_LEVEL=INFO" >> .env
+```
+
+#### Step 4: Build and Run Docker Container
+
+```bash
+# Build Docker image
+sudo docker build -t telegram-bot-base .
+
+# Run container with auto-restart policy
+sudo docker run -d \
+  --name telegram-bot \
+  --restart=always \
+  --env-file .env \
+  telegram-bot-base
+```
+
+**Note:** The `--restart=always` flag ensures the container automatically restarts after system reboots or crashes.
+
+#### Step 5: Verify Deployment
+
+```bash
+# Check container status
+docker ps
+
+# View live logs
+docker logs -f telegram-bot
+
+# Expected output:
+# Bot started successfully!
+# Start polling
+# Run polling for bot ...
+```
+
+#### Step 6: Update Restart Policy (if needed)
+
+If you didn't set `--restart=always` during creation:
+
+```bash
+docker update --restart=always telegram-bot
+
+# Verify restart policy
+docker inspect -f '{{ .HostConfig.RestartPolicy.Name }}' telegram-bot
+# Should output: always
+```
+
+#### Step 7: Test Auto-Recovery
+
+```bash
+# Reboot VM to test auto-start
+sudo reboot
+
+# After reconnecting, verify bot is running
+docker ps
+# The container should show "Up ..."
+```
+
+#### Common Docker Commands for VM Deployment
+
+| Command | Description |
+|---------|-------------|
+| `docker ps -a` | List all containers (running and stopped) |
+| `docker logs -f telegram-bot` | View container logs (live) |
+| `docker restart telegram-bot` | Restart the bot container |
+| `docker stop telegram-bot` | Stop the bot |
+| `docker start telegram-bot` | Start stopped container |
+| `docker rm -f telegram-bot` | Remove container (force) |
+| `docker build -t telegram-bot-base .` | Rebuild image after code changes |
+
+#### Updating the Bot
+
+```bash
+# Navigate to project directory
+cd telegram-bot-base
+
+# Pull latest changes from GitHub
+git pull origin main
+
+# Stop and remove old container
+docker stop telegram-bot
+docker rm telegram-bot
+
+# Rebuild image with new code
+docker build -t telegram-bot-base .
+
+# Run updated container
+docker run -d \
+  --name telegram-bot \
+  --restart=always \
+  --env-file .env \
+  telegram-bot-base
+```
+
+#### Security Recommendations for VM Deployment
+
+1. **Configure Network Security Group (NSG):**
+   - Only allow SSH (port 22) from your IP
+   - No need to expose other ports for long-polling bots
+
+2. **Secure SSH access:**
+   ```bash
+   # Disable password authentication (use keys only)
+   sudo nano /etc/ssh/sshd_config
+   # Set: PasswordAuthentication no
+   sudo systemctl restart ssh
+   ```
+
+3. **Keep system updated:**
+   ```bash
+   # Set up automatic security updates
+   sudo apt install unattended-upgrades -y
+   sudo dpkg-reconfigure --priority=low unattended-upgrades
+   ```
+
+4. **Monitor disk space:**
+   ```bash
+   # Check disk usage
+   df -h
+   
+   # Clean Docker resources periodically
+   docker system prune -a
+   ```
+
+---
+
+### Option B: Azure Container Instances (ACI)
 
 **Best for:** Simple, serverless container hosting with pay-per-second billing.
 
@@ -281,7 +469,7 @@ az container logs --resource-group telegram-bot-rg \
 
 ---
 
-### Option B: Azure App Service
+### Option C: Azure App Service
 
 **Best for:** Web app hosting with built-in CI/CD and scaling.
 
