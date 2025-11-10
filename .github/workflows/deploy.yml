@@ -1,0 +1,31 @@
+name: Deploy Telegram Bot to Azure VM
+
+on:
+  push:
+    branches:
+      - main   # triggers deployment on push to main branch
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Connect to Azure VM via SSH and redeploy bot
+        uses: appleboy/ssh-action@v1.1.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd ~/telegram-bot-base
+            echo "Pulling latest code..."
+            git pull origin main
+            echo "Stopping old container..."
+            sudo docker compose down || true
+            echo "Rebuilding and restarting container..."
+            sudo docker build -t telegram-bot-base .
+            sudo docker compose up -d --build
+            echo "✅ Bot redeployed successfully!"
