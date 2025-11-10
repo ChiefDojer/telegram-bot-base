@@ -45,6 +45,13 @@ async def cmd_about(message: Message):
     await message.answer(about_text)
 
 
+@router.message(Command("date"))
+async def cmd_date(message: Message):
+    """Handle /date command"""
+    from datetime import datetime
+    current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    await message.answer(f"📅 Current date and time: {current_date}")
+
 @router.message(F.text)
 async def echo_message(message: Message):
     """Echo any text message"""
