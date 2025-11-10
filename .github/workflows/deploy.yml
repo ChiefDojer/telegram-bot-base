@@ -28,10 +28,10 @@ jobs:
             cd ~/telegram-bot-base || { echo "❌ Repo not found"; exit 1; }
             echo "🔹 Pulling latest code from GitHub..."
             git pull origin main
-            echo "🔹 Stopping old container..."
-            sudo docker compose down || true
-            echo "🔹 Building new image..."
-            sudo docker build -t telegram-bot-base .
-            echo "🔹 Starting new container..."
+            echo "🔹 Stopping and removing old containers..."
+            sudo docker compose down
+            echo "🔹 Rebuilding and starting new container..."
             sudo docker compose up -d --build
+            echo "🔹 Checking container status..."
+            sudo docker compose ps
             echo "✅ Bot redeployed successfully on $(hostname)!"
