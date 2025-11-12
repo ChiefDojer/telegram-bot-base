@@ -26,7 +26,8 @@ async def cmd_help(message: Message):
         "<b>📚 Available Commands:</b>\n\n"
         "/start - Start the bot\n"
         "/help - Show this help message\n"
-        "/about - About this bot\n\n"
+        "/about - About this bot\n"
+        "/date - Show current date and time\n\n"
         "Just send me any message and I'll echo it back!"
     )
     await message.answer(help_text)
@@ -49,7 +50,11 @@ async def cmd_about(message: Message):
 async def cmd_date(message: Message):
     """Handle /date command"""
     from datetime import datetime
-    current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    import pytz
+    
+    # Default to UTC, but you can change this to your preferred timezone
+    timezone = pytz.UTC
+    current_date = datetime.now(timezone).strftime("%Y-%m-%d %H:%M:%S %Z")
     await message.answer(f"📅 Current date and time: {current_date}")
 
 @router.message(F.text)

@@ -25,9 +25,12 @@ A production-ready Telegram bot template built with **Aiogram v3**, containerize
   - [3. Configure Environment](#3-configure-environment)
   - [4. Local Development](#4-local-development)
 - [Docker Setup](#docker-setup)
+- [Testing](#testing)
+- [CI/CD Pipeline](#cicd-pipeline)
 - [Azure Deployment](#azure-deployment)
-  - [Option A: Azure Container Instances (ACI)](#option-a-azure-container-instances-aci)
-  - [Option B: Azure App Service](#option-b-azure-app-service)
+  - [Option A: Azure Ubuntu VM with Docker](#option-a-azure-ubuntu-vm-with-docker)
+  - [Option B: Azure Container Instances (ACI)](#option-b-azure-container-instances-aci)
+  - [Option C: Azure App Service](#option-c-azure-app-service)
 - [Bot Commands](#bot-commands)
 - [Customization](#customization)
 - [Troubleshooting](#troubleshooting)
@@ -38,10 +41,13 @@ A production-ready Telegram bot template built with **Aiogram v3**, containerize
 
 - **Aiogram v3**: Modern async Python framework for Telegram bots
 - **Modular Architecture**: Separates handlers from main bot logic
-- **Docker Support**: Containerized for consistent deployments
+- **Docker Support**: Containerized for consistent deployments with Docker Compose
 - **Azure-Ready**: Pre-configured for Azure cloud hosting
 - **Environment Variables**: Secure token management with `.env`
 - **Long Polling**: Works out-of-the-box (webhook setup available)
+- **Unit Testing**: Comprehensive test suite with pytest and coverage reporting
+- **CI/CD Pipeline**: Automated testing and deployment with GitHub Actions
+- **Timezone Support**: Date/time commands with timezone awareness (pytz)
 
 ---
 
@@ -61,12 +67,22 @@ Before you begin, ensure you have:
 
 ```
 telegram-bot-base/
+├── .github/
+│   └── workflows/
+│       ├── test.yml         # CI workflow for running tests
+│       └── deploy.yml       # CD workflow for Azure deployment
 ├── app/
 │   ├── __init__.py          # Python package marker
 │   ├── main.py              # Bot initialization & startup
 │   ├── handlers.py          # Message/command handlers
-│   └── requirements.txt     # Python dependencies
+│   ├── test_handlers.py     # Unit tests for handlers
+│   ├── requirements.txt     # Python dependencies
+│   └── requirements-test.txt # Testing dependencies
+├── htmlcov/                 # HTML coverage reports (generated)
 ├── .env.example             # Environment variable template
+├── .gitignore               # Git ignore patterns
+├── pytest.ini               # Pytest configuration
+├── docker-compose.yml       # Docker Compose configuration
 ├── Dockerfile               # Container build instructions
 └── README.md                # This file
 ```
@@ -162,6 +178,19 @@ docker build -t telegram-bot .
 docker run --env-file .env telegram-bot
 ```
 
+#### Option C: Run with Docker Compose
+
+```bash
+# Build and start the bot
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop the bot
+docker-compose down
+```
+
 ---
 
 ## 🐳 Docker Setup
@@ -174,6 +203,15 @@ The included `Dockerfile` uses a multi-stage build for optimization:
 - **Working Directory**: `/app`
 - **Dependencies**: Installed from `requirements.txt`
 - **Entry Point**: Runs `main.py`
+
+### Docker Compose Configuration
+
+The `docker-compose.yml` provides a simplified deployment:
+
+- **Service Name**: `telegram-bot`
+- **Restart Policy**: `unless-stopped` (auto-restart on failure)
+- **Environment**: Loaded from `.env` file
+- **Logging**: JSON logging with rotation (max 10MB, 3 files)
 
 ### Docker Commands
 
@@ -194,6 +232,25 @@ docker logs <container_id>
 docker stop <container_id>
 ```
 
+### Docker Compose Commands
+
+```bash
+# Start bot in background
+docker-compose up -d
+
+# View logs (live)
+docker-compose logs -f telegram-bot
+
+# Stop bot
+docker-compose down
+
+# Rebuild and restart
+docker-compose up -d --build
+
+# Check status
+docker-compose ps
+```
+
 ### Push to Docker Hub (Optional)
 
 ```bash
@@ -205,6 +262,205 @@ docker login
 
 # Push
 docker push YOUR_DOCKERHUB_USERNAME/telegram-bot:latest
+```
+
+---
+
+## 🧪 Testing
+
+The project includes a comprehensive test suite using **pytest** with async support and coverage reporting.
+
+### Running Tests
+
+#### Install Test Dependencies
+
+```bash
+pip install -r app/requirements-test.txt
+```
+
+#### Run All Tests
+
+```bash
+# Run tests with coverage
+pytest app/test_handlers.py --cov=handlers --cov-report=html
+
+# Run tests without coverage
+pytest app/test_handlers.py
+
+# Run tests with verbose output
+pytest app/test_handlers.py -v
+```
+
+#### View Coverage Report
+
+After running tests with `--cov-report=html`, open the coverage report:
+
+```bash
+# Windows PowerShell
+start htmlcov/index.html
+
+# Linux/Mac
+open htmlcov/index.html
+```
+
+### Test Structure
+
+The test suite includes:
+
+- **Unit Tests**: Tests for individual command handlers (`/start`, `/help`, `/about`, `/date`)
+- **Message Handling Tests**: Tests for echo functionality and non-text messages
+- **Integration Tests**: Tests for handler async behavior and parameter validation
+
+### Writing New Tests
+
+Example test for a new command:
+
+```python
+@pytest.mark.asyncio
+async def test_new_command(self):
+    """Test the new command"""
+    message = create_mock_message(text="/newcommand")
+    
+    await new_command_handler(message)
+    
+    message.answer.assert_called_once()
+    call_args = message.answer.call_args[0][0]
+    assert "Expected text" in call_args
+```
+
+### Configuration
+
+Tests are configured in `pytest.ini`:
+- `pythonpath = app`: Sets the Python path to the app directory
+- `asyncio_mode = auto`: Automatically detects async tests
+- `asyncio_default_fixture_loop_scope = function`: Sets async fixture scope
+
+---
+
+## 🔄 CI/CD Pipeline
+
+The project includes GitHub Actions workflows for automated testing and deployment.
+
+### Workflows
+
+#### 1. Unit Tests Workflow (`test.yml`)
+
+Runs automatically on:
+- **Push to `main` branch**
+- **Pull requests to `main` branch**
+- **Manual trigger** (workflow_dispatch)
+
+**Steps:**
+1. Checkout code
+2. Set up Python 3.11
+3. Install dependencies (requirements.txt + requirements-test.txt)
+4. Run pytest with coverage reporting
+5. Upload coverage reports to Codecov (optional)
+6. Upload HTML coverage report as artifact
+7. Comment coverage on pull requests
+
+**Artifacts:**
+- Coverage HTML reports (retained for 30 days)
+- Coverage XML for Codecov integration
+
+#### 2. Deploy Workflow (`deploy.yml`)
+
+Runs automatically on:
+- **Push to `main` branch** (after tests pass)
+- **Manual trigger** (workflow_dispatch)
+
+**Steps:**
+1. Run tests (same as test.yml)
+2. Deploy to Azure VM via SSH (only if tests pass)
+   - Pull latest code
+   - Rebuild Docker containers
+   - Restart bot with docker-compose
+
+**Dependencies:**
+- Deploy job requires test job to succeed
+- Tests must pass before deployment
+
+### Setting Up CI/CD
+
+#### Required GitHub Secrets
+
+For the deploy workflow to work, add these secrets to your repository:
+
+1. Go to **Settings** → **Secrets and variables** → **Actions**
+2. Add the following secrets:
+
+| Secret Name | Description | Example |
+|------------|-------------|---------|
+| `SSH_HOST` | Azure VM public IP address | `20.123.456.789` |
+| `SSH_USER` | SSH username for VM | `azureuser` |
+| `SSH_PRIVATE_KEY` | Private SSH key for authentication | `-----BEGIN OPENSSH PRIVATE KEY-----...` |
+
+#### Generating SSH Key for CI/CD
+
+```bash
+# On your local machine
+ssh-keygen -t ed25519 -C "github-actions-bot" -f ~/.ssh/github_actions_key
+
+# Display private key (add to SSH_PRIVATE_KEY secret)
+cat ~/.ssh/github_actions_key
+
+# Copy public key to Azure VM
+ssh-copy-id -i ~/.ssh/github_actions_key.pub azureuser@YOUR_VM_IP
+
+# Or manually add to VM's authorized_keys
+cat ~/.ssh/github_actions_key.pub
+# Then on VM: echo "PUBLIC_KEY_CONTENT" >> ~/.ssh/authorized_keys
+```
+
+### Viewing Test Results
+
+#### In GitHub Actions UI
+
+1. Navigate to **Actions** tab in your repository
+2. Click on a workflow run
+3. View test results and logs
+4. Download coverage report artifacts
+
+#### Coverage Reports
+
+- **Terminal output**: Shows coverage % during workflow run
+- **HTML report**: Download from workflow artifacts
+- **Codecov** (optional): Set up Codecov account and add `CODECOV_TOKEN` secret for cloud coverage tracking
+
+### Branch Protection Rules (Recommended)
+
+Protect your `main` branch by requiring tests to pass:
+
+1. Go to **Settings** → **Branches**
+2. Add branch protection rule for `main`
+3. Enable:
+   - ✅ Require status checks to pass before merging
+   - ✅ Require branches to be up to date
+   - Select: `test` workflow
+4. Save changes
+
+This ensures no code can be merged to `main` without passing tests!
+
+### Manual Workflow Triggers
+
+Both workflows support manual triggering:
+
+```bash
+# Trigger from GitHub UI
+1. Go to Actions tab
+2. Select workflow (Test or Deploy)
+3. Click "Run workflow"
+4. Select branch
+5. Click "Run workflow" button
+```
+
+### Workflow Status Badges
+
+Add status badges to your README:
+
+```markdown
+![Tests](https://github.com/YOUR_USERNAME/telegram-bot-base/workflows/Run%20Unit%20Tests/badge.svg)
+![Deploy](https://github.com/YOUR_USERNAME/telegram-bot-base/workflows/Deploy%20Telegram%20Bot%20to%20Azure%20VM/badge.svg)
 ```
 
 ---
@@ -375,6 +631,10 @@ docker run -d \
   --restart=always \
   --env-file .env \
   telegram-bot-base
+
+# Or use docker-compose for simpler updates
+docker-compose down
+docker-compose up -d --build
 ```
 
 #### Security Recommendations for VM Deployment
@@ -533,6 +793,7 @@ The template includes these default commands (defined in `handlers.py`):
 | `/start` | Welcome message and bot introduction |
 | `/help` | Display available commands |
 | `/about` | Show bot information |
+| `/date` | Show current date and time with timezone |
 
 ### Registering Commands with BotFather
 
@@ -546,6 +807,7 @@ To enable autocomplete in Telegram:
    start - Start the bot
    help - Show help message
    about - About this bot
+   date - Show current date and time
    ```
 
 ---
@@ -666,6 +928,38 @@ dp = Dispatcher(storage=MemoryStorage())
 - [Telegram Bot API](https://core.telegram.org/bots/api)
 - [Azure Container Instances Docs](https://learn.microsoft.com/en-us/azure/container-instances/)
 - [Docker Best Practices](https://docs.docker.com/develop/dev-best-practices/)
+- [Pytest Documentation](https://docs.pytest.org/)
+- [Docker Compose Documentation](https://docs.docker.com/compose/)
+
+---
+
+## 🆕 Recent Updates
+
+### CI/CD Pipeline (November 2025)
+- **Automated Testing**: GitHub Actions workflow runs unit tests on every push to `main` and pull requests
+- **Continuous Deployment**: Automatic deployment to Azure VM after tests pass
+- **Test-First Deployment**: Deploy workflow only runs if all tests succeed
+- **Coverage Reports**: Automated coverage report generation and artifact uploads
+- **Branch Protection**: Support for requiring passing tests before merging
+
+### Testing Infrastructure (November 2025)
+- Added comprehensive unit tests with `pytest`
+- Integrated `pytest-asyncio` for testing async handlers
+- Added code coverage reporting with `pytest-cov`
+- Created `pytest.ini` configuration for async test support
+- HTML coverage reports generated in `htmlcov/` directory
+
+### New Features
+- **`/date` command**: Shows current date and time with timezone support
+- **Timezone support**: Added `pytz` dependency for accurate timezone handling
+- **Docker Compose**: Simplified deployment with `docker-compose.yml`
+- **Git ignore**: Added comprehensive `.gitignore` for Python projects
+
+### Improvements
+- Enhanced handler tests covering all command scenarios
+- Mock utilities for testing Telegram message objects
+- Logging configuration with configurable log levels
+- Automatic test discovery with proper Python path configuration
 
 ---
 
