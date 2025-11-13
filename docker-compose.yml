@@ -6,8 +6,8 @@ services:
     image: telegram-bot
     container_name: telegram-bot-base
     restart: unless-stopped
-    env_file:
-      - .env
+    environment:
+    - BOT_TOKEN=${BOT_TOKEN}
     logging:
       driver: "json-file"
       options:
