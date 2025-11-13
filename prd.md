@@ -95,8 +95,12 @@ The current implementation includes a basic echo bot with multiple command handl
   * Must provide Dockerfile for container builds
   * Must include docker-compose.yml for simplified deployment
   * Must use Python 3.11 slim base image for efficiency
-  * Must support automatic container restart on failure
+  * Must support automatic container restart on failure (unless-stopped policy)
   * Must implement log rotation (10MB max, 3 files)
+  * Must use service name 'telegram-bot' for docker compose commands
+  * Must create image named 'telegram-bot' when building
+  * Must create container named 'telegram-bot-base' when running
+  * Must allow service-specific operations without affecting other containers
 
 * **Testing Infrastructure** (Priority: High)
   * Must include comprehensive unit tests for all handlers
@@ -111,6 +115,11 @@ The current implementation includes a basic echo bot with multiple command handl
   * Must run automated tests on all pull requests
   * Must block deployment if tests fail
   * Must deploy to Azure VM after successful tests
+  * Must target only the telegram-bot service during deployment
+  * Must not affect other containers running on the same VM
+  * Must stop and remove old telegram-bot container before deploying
+  * Must rebuild telegram-bot service with --no-cache flag
+  * Must display service status and logs after deployment
   * Must support manual workflow triggers
   * Must upload coverage artifacts for review
 
@@ -390,13 +399,15 @@ The CI/CD pipeline automatically runs tests and deploys to their Azure VM. They 
 * **ID**: GH-009
 * **Description**: As a developer, I want to deploy the bot using Docker so that I have a consistent runtime environment.
 * **Acceptance criteria**:
-  * I can build a Docker image with `docker build`
-  * I can run the container with `docker run --env-file .env`
+  * I can build a Docker image named 'telegram-bot' with `docker build`
+  * I can run the container named 'telegram-bot-base' with docker run
   * I can use docker-compose for simplified deployment
-  * The container restarts automatically on failure
+  * The service is named 'telegram-bot' in docker-compose.yml
+  * The container restarts automatically on failure (unless-stopped)
   * Logs are rotated to prevent disk space issues
-  * I can view logs with `docker logs` command
+  * I can view logs with `docker logs telegram-bot-base` or `docker compose logs telegram-bot`
   * Environment variables are loaded from .env file
+  * I can manage only this service without affecting other containers
 
 ### 10.10. Automatic deployment via CI/CD
 
@@ -407,8 +418,12 @@ The CI/CD pipeline automatically runs tests and deploys to their Azure VM. They 
   * Tests run automatically before deployment
   * If tests fail, deployment is blocked
   * If tests pass, bot deploys to Azure VM via SSH
-  * Old container is stopped and removed
-  * New container is built and started
+  * Deployment script targets only the telegram-bot service
+  * Old telegram-bot container is stopped and removed
+  * New telegram-bot service is rebuilt with --no-cache
+  * New telegram-bot container is started
+  * Other containers on the VM remain unaffected
+  * Container status and logs are displayed in workflow output
   * I receive notification of deployment success/failure
   * Deployment completes within 5 minutes of push
 

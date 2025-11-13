@@ -208,7 +208,9 @@ The included `Dockerfile` uses a multi-stage build for optimization:
 
 The `docker-compose.yml` provides a simplified deployment:
 
-- **Service Name**: `telegram-bot`
+- **Service Name**: `telegram-bot` (used in docker compose commands)
+- **Image Name**: `telegram-bot` (the Docker image name)
+- **Container Name**: `telegram-bot-base` (the running container name)
 - **Restart Policy**: `unless-stopped` (auto-restart on failure)
 - **Environment**: Loaded from `.env` file
 - **Logging**: JSON logging with rotation (max 10MB, 3 files)
@@ -372,13 +374,21 @@ Runs automatically on:
 **Steps:**
 1. Run tests (same as test.yml)
 2. Deploy to Azure VM via SSH (only if tests pass)
-   - Pull latest code
-   - Rebuild Docker containers
-   - Restart bot with docker-compose
+   - Pull latest code from GitHub
+   - Stop and remove only the `telegram-bot` service
+   - Rebuild the `telegram-bot` service (no cache)
+   - Start the `telegram-bot` container
+   - Display container status and logs
 
 **Dependencies:**
 - Deploy job requires test job to succeed
 - Tests must pass before deployment
+
+**Important Notes:**
+- The workflow targets only the `telegram-bot` service by name
+- Other containers on the VM are not affected during deployment
+- Uses service-specific commands to avoid disrupting other services
+- Ensures clean rebuild with `--no-cache` flag
 
 ### Setting Up CI/CD
 
@@ -543,21 +553,34 @@ echo "BOT_TOKEN=your_bot_token_here" > .env
 echo "LOG_LEVEL=INFO" >> .env
 ```
 
-#### Step 4: Build and Run Docker Container
+#### Step 4: Build and Run with Docker Compose (Recommended)
+
+```bash
+# Build and start the bot using docker-compose
+sudo docker compose up -d --build
+
+# View logs
+sudo docker compose logs -f telegram-bot
+
+# Check status
+sudo docker compose ps
+```
+
+**Alternative: Manual Docker Commands**
 
 ```bash
 # Build Docker image
-sudo docker build -t telegram-bot-base .
+sudo docker build -t telegram-bot .
 
 # Run container with auto-restart policy
 sudo docker run -d \
-  --name telegram-bot \
-  --restart=always \
+  --name telegram-bot-base \
+  --restart=unless-stopped \
   --env-file .env \
-  telegram-bot-base
+  telegram-bot
 ```
 
-**Note:** The `--restart=always` flag ensures the container automatically restarts after system reboots or crashes.
+**Note:** Docker Compose automatically handles container naming, image tagging, and restart policies based on `docker-compose.yml` configuration.
 
 #### Step 5: Verify Deployment
 
@@ -574,16 +597,21 @@ docker logs -f telegram-bot
 # Run polling for bot ...
 ```
 
-#### Step 6: Update Restart Policy (if needed)
+#### Step 6: Verify Container Configuration
 
-If you didn't set `--restart=always` during creation:
+Check the container details:
 
 ```bash
-docker update --restart=always telegram-bot
+# Verify container name
+docker ps --filter "name=telegram-bot-base"
 
 # Verify restart policy
-docker inspect -f '{{ .HostConfig.RestartPolicy.Name }}' telegram-bot
-# Should output: always
+docker inspect -f '{{ .HostConfig.RestartPolicy.Name }}' telegram-bot-base
+# Should output: unless-stopped
+
+# Verify image name
+docker inspect -f '{{ .Config.Image }}' telegram-bot-base
+# Should output: telegram-bot
 ```
 
 #### Step 7: Test Auto-Recovery
@@ -599,17 +627,53 @@ docker ps
 
 #### Common Docker Commands for VM Deployment
 
+**Using Docker Compose (Recommended):**
+
+| Command | Description |
+|---------|-------------|
+| `sudo docker compose ps` | List containers managed by compose |
+| `sudo docker compose logs -f telegram-bot` | View logs (live) for telegram-bot service |
+| `sudo docker compose restart telegram-bot` | Restart only telegram-bot service |
+| `sudo docker compose stop telegram-bot` | Stop telegram-bot service |
+| `sudo docker compose start telegram-bot` | Start telegram-bot service |
+| `sudo docker compose down` | Stop and remove all compose containers |
+| `sudo docker compose up -d --build telegram-bot` | Rebuild and restart telegram-bot only |
+
+**Using Docker Directly:**
+
 | Command | Description |
 |---------|-------------|
 | `docker ps -a` | List all containers (running and stopped) |
-| `docker logs -f telegram-bot` | View container logs (live) |
-| `docker restart telegram-bot` | Restart the bot container |
-| `docker stop telegram-bot` | Stop the bot |
-| `docker start telegram-bot` | Start stopped container |
-| `docker rm -f telegram-bot` | Remove container (force) |
-| `docker build -t telegram-bot-base .` | Rebuild image after code changes |
+| `docker logs -f telegram-bot-base` | View container logs (live) |
+| `docker restart telegram-bot-base` | Restart the bot container |
+| `docker stop telegram-bot-base` | Stop the bot |
+| `docker start telegram-bot-base` | Start stopped container |
+| `docker rm -f telegram-bot-base` | Remove container (force) |
+| `docker images` | List all images (look for telegram-bot) |
 
 #### Updating the Bot
+
+**Recommended Method (Docker Compose):**
+
+```bash
+# Navigate to project directory
+cd telegram-bot-base
+
+# Pull latest changes from GitHub
+git pull origin main
+
+# Stop and remove only the telegram-bot service
+sudo docker compose stop telegram-bot
+sudo docker compose rm -f telegram-bot
+
+# Rebuild and start telegram-bot service
+sudo docker compose up -d --build telegram-bot
+
+# View logs to verify successful restart
+sudo docker compose logs --tail=50 telegram-bot
+```
+
+**Alternative Method (Manual Docker):**
 
 ```bash
 # Navigate to project directory
@@ -619,23 +683,21 @@ cd telegram-bot-base
 git pull origin main
 
 # Stop and remove old container
-docker stop telegram-bot
-docker rm telegram-bot
+docker stop telegram-bot-base
+docker rm telegram-bot-base
 
 # Rebuild image with new code
-docker build -t telegram-bot-base .
+docker build -t telegram-bot .
 
 # Run updated container
 docker run -d \
-  --name telegram-bot \
-  --restart=always \
+  --name telegram-bot-base \
+  --restart=unless-stopped \
   --env-file .env \
-  telegram-bot-base
-
-# Or use docker-compose for simpler updates
-docker-compose down
-docker-compose up -d --build
+  telegram-bot
 ```
+
+**Note:** The CI/CD workflow automatically follows the Docker Compose method when you push to the main branch.
 
 #### Security Recommendations for VM Deployment
 

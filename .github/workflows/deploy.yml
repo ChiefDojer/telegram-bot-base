@@ -53,10 +53,15 @@ jobs:
             cd ~/telegram-bot-base || { echo "❌ Repo not found"; exit 1; }
             echo "🔹 Pulling latest code from GitHub..."
             git pull origin main
-            echo "🔹 Stopping and removing old containers..."
-            sudo docker compose down
-            echo "🔹 Rebuilding and starting new container..."
-            sudo docker compose up -d --build
-            echo "🔹 Checking container status..."
-            sudo docker compose ps
-            echo "✅ Bot redeployed successfully on $(hostname)!"
+            echo "🔹 Stopping and removing telegram-bot container only..."
+            sudo docker compose stop telegram-bot
+            sudo docker compose rm -f telegram-bot
+            echo "🔹 Rebuilding telegram-bot service..."
+            sudo docker compose build --no-cache telegram-bot
+            echo "🔹 Starting telegram-bot container..."
+            sudo docker compose up -d telegram-bot
+            echo "🔹 Checking telegram-bot container status..."
+            sudo docker compose ps telegram-bot
+            echo "🔹 Checking telegram-bot logs (last 20 lines)..."
+            sudo docker compose logs --tail=20 telegram-bot
+            echo "✅ Telegram bot redeployed successfully on $(hostname)!"
