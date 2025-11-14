@@ -61,13 +61,17 @@ jobs:
             cd ~/telegram-bot-base || { echo "❌ Failed to enter repo directory"; exit 1; }
             echo "🔹 Pulling latest code from GitHub..."
             git pull origin main
+
+            echo "🔹 Setting environment variables for Docker Compose..."
+            export BOT_TOKEN=${{ secrets.BOT_TOKEN }}
+
             echo "🔹 Stopping and removing telegram-bot container only..."
             sudo docker compose stop telegram-bot
             sudo docker compose rm -f telegram-bot
             echo "🔹 Rebuilding telegram-bot service..."
             sudo docker compose build --no-cache telegram-bot
             echo "🔹 Starting telegram-bot container..."
-            BOT_TOKEN=${{ secrets.BOT_TOKEN }} sudo docker compose up -d telegram-bot
+            sudo docker compose up -d telegram-bot
             echo "🔹 Checking telegram-bot container status..."
             sudo docker compose ps telegram-bot
             echo "🔹 Checking telegram-bot logs (last 20 lines)..."
