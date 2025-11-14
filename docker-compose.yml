@@ -1,9 +1,7 @@
-version: '3.8'
-
 services:
-  telegram-bot:
+  telegram-bot-base:
     build: .
-    image: telegram-bot
+    image: telegram-bot-base
     container_name: telegram-bot-base
     restart: unless-stopped
     environment:
