@@ -4,6 +4,7 @@ services:
     image: telegram-bot-base
     container_name: telegram-bot-base
     restart: unless-stopped
+    mem_limit: 512m
     environment:
       - BOT_TOKEN=${BOT_TOKEN}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
